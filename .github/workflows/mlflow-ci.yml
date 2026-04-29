@@ -1,0 +1,68 @@
+name: "MLOps Pipeline — Train & Validate"
+
+# ─────────────────────────────────────────────────────────────
+# TRIGGERS
+# Se ejecuta en cada push a main y en Pull Requests hacia main.
+# Esto garantiza que ningún cambio roto llegue a la rama principal.
+# ─────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ml_pipeline:
+    name: "Train → Validate → Upload"
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ── 1. CHECKOUT ─────────────────────────────────────────
+      - name: "📥 Clonar repositorio"
+        uses: actions/checkout@v4
+
+      # ── 2. PYTHON ───────────────────────────────────────────
+      - name: "🐍 Configurar Python 3.10"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"                  # cachea dependencias entre runs
+
+      # ── 3. DEPENDENCIAS ─────────────────────────────────────
+      - name: "📦 Instalar dependencias"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── 4. ENTRENAMIENTO ────────────────────────────────────
+      # Si train.py falla (sys.exit(1)), el job se detiene aquí.
+      - name: "🧪 Entrenar modelo"
+        run: make train
+
+      # ── 5. VALIDACIÓN (QUALITY GATE) ────────────────────────
+      # Si el MSE supera el umbral, validate.py hace sys.exit(1)
+      # y el job falla, impidiendo que el artefacto se suba.
+      - name: "✅ Validar desempeño del modelo"
+        run: make validate
+
+      # ── 6. SUBIR ARTEFACTOS ─────────────────────────────────
+      # Solo se ejecuta si los pasos anteriores tuvieron éxito.
+      - name: "📤 Subir model.pkl como artefacto de GitHub"
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "modelo-validado"
+          path: model.pkl
+          retention-days: 30           # conservar el artefacto 30 días
+
+      # ── 7. SUBIR MLRUNS (trazabilidad completa) ─────────────
+      # Permite descargar el directorio mlruns completo para
+      # inspeccionar los experimentos en MLflow UI localmente.
+      - name: "📊 Subir mlruns como artefacto de trazabilidad"
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "mlruns-experimento"
+          path: mlruns/
+          retention-days: 30

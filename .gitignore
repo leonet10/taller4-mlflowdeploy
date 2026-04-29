@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# MLflow local (no se versiona; se sube como artefacto en CI)
+mlruns/
+
+# Modelo serializado (se genera en cada run de CI)
+model.pkl
